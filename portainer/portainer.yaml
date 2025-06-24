@@ -1,0 +1,210 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: portainer
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: portainer-ro-clusteradmin
+  namespace: portainer
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: portainer-ro-clusterrole
+rules:
+- apiGroups:
+  - "*"
+  resources:
+  - "*"
+  # Since this is read only we won't worry about which resources - here is a partial list below.
+  # - pods
+  # - pods/log
+  # - services
+  # - endpoints
+  # - namespaces
+  # - nodes
+  verbs:
+  - "*"
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: portainer-ro-clusterbinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: portainer-ro-clusterrole
+subjects:
+- kind: ServiceAccount
+  name: portainer-ro-clusteradmin
+  namespace: portainer
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: portainer
+  namespace: portainer
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi # Adjust storage size as needed
+  # If you don't have a default StorageClass or want to use a specific one in k3s (e.g., local-path),
+  # you might need to uncomment and set the storageClassName:
+  # storageClassName: local-path
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portainer
+  namespace: portainer
+  labels:
+    app.kubernetes.io/name: portainer
+    app.kubernetes.io/instance: portainer
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # Ensures the new pod starts after the old one is terminated, important for PVCs
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: portainer
+      app.kubernetes.io/instance: portainer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: portainer
+        app.kubernetes.io/instance: portainer
+    spec:
+      serviceAccountName: portainer-ro-clusteradmin
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: portainer
+      containers:
+        - name: portainer
+          env:
+            - name: PORTAINER_READ_ONLY
+              value: "true"
+            - name: TZ
+              value: "America/New_York"
+          image: portainer/portainer-ce:latest # You can pin to a specific version, e.g., portainer/portainer-ce:2.19.4
+          imagePullPolicy: Always
+          # args:
+            # Optionally, you can enable the Edge Agent feature if needed
+            # - '--edge-agent'
+            # - '--edge-key=your_edge_key_here' # If using Edge Agent
+            # - '--tunnel-port=8000' # Default Edge Agent tunnel port, ensure it matches service if used
+          ports:
+            - name: http
+              containerPort: 9000
+              protocol: TCP
+            - name: https
+              containerPort: 9443
+              protocol: TCP
+            # - name: edge # Port for Portainer Edge Agent, if you plan to use it.
+            #   containerPort: 8000
+            #   protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9443 # Use HTTPS for liveness probe as it's enabled by default
+              scheme: HTTPS
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9443 # Use HTTPS for readiness probe
+              scheme: HTTPS
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          resources: # Optional: Define resource requests and limits
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: portainer
+  namespace: portainer
+  labels:
+    app.kubernetes.io/name: portainer
+    app.kubernetes.io/instance: portainer
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9000
+      targetPort: 9000
+      protocol: TCP
+      name: http
+      # nodePort: 30777 # Exposed on the node
+    - port: 9443
+      targetPort: 9443
+      protocol: TCP
+      name: https
+      # nodePort: 30779 # Exposed on the node
+    # If you enable and use the Edge Agent feature on a different port, expose it here as well.
+    # The default Portainer manifest also exposes port 8000 (internally) for Edge Agent,
+    # which is mapped to a different NodePort (e.g., 30776) if needed.
+    # If you only need web UI access, the http and https ports are sufficient.
+    # - port: 8000 # Portainer Edge Agent server port (not the tunnel port for agents to connect to)
+    #   targetPort: 8000
+    #   protocol: TCP
+    #   name: edge
+      # nodePort: 30776 # Exposed on the node
+  selector:
+    app.kubernetes.io/name: portainer
+    app.kubernetes.io/instance: portainer
+---
+# Traefik Middleware to strip the /portainer prefix
+apiVersion: traefik.io/v1alpha1 # Use traefik.containo.us/v1alpha1 for older Traefik versions
+kind: Middleware
+metadata:
+  name: portainer-strip-prefix
+  namespace: portainer
+spec:
+  stripPrefix:
+    prefixes:
+      - /portainer
+    # forceSlash: false # Default is true. Keep true so /portainer results in / for the backend.
+---
+# Ingress route for Portainer
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: portainer-ingress
+  namespace: portainer
+  annotations:
+    # If your k3s Traefik is not the default or you need specific entrypoints:
+    # kubernetes.io/ingress.class: traefik
+    # traefik.ingress.kubernetes.io/router.entrypoints: web # Or websecure for HTTPS
+    traefik.ingress.kubernetes.io/router.middlewares: portainer-strip-prefix@kubernetescrd # Referencing the Middleware
+spec:
+  # ingressClassName: traefik # Uncomment and use if you have a specific IngressClass named 'traefik' or if it's required by your setup.
+  rules:
+  - http: # Assuming your Traefik entrypoint (e.g., web) listens on HTTP.
+           # For HTTPS, configure TLS section and ensure Traefik entrypoint (e.g., websecure) is used.
+      paths:
+      - path: /portainer
+        pathType: Prefix # Ensures /portainer and /portainer/* are matched
+        backend:
+          service:
+            name: portainer
+            port:
+              number: 9000 # Route to Portainer's HTTP port. Portainer will handle its own HTTPS on 9443 if accessed directly,
+                           # but Traefik can handle TLS termination for the Ingress.
