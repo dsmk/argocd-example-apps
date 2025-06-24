@@ -170,41 +170,41 @@ spec:
   selector:
     app.kubernetes.io/name: portainer
     app.kubernetes.io/instance: portainer
----
+# ---
 # Traefik Middleware to strip the /portainer prefix
-apiVersion: traefik.io/v1alpha1 # Use traefik.containo.us/v1alpha1 for older Traefik versions
-kind: Middleware
-metadata:
-  name: portainer-strip-prefix
-  namespace: portainer
-spec:
-  stripPrefix:
-    prefixes:
-      - /portainer
-    # forceSlash: false # Default is true. Keep true so /portainer results in / for the backend.
----
-# Ingress route for Portainer
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: portainer-ingress
-  namespace: portainer
-  annotations:
-    # If your k3s Traefik is not the default or you need specific entrypoints:
-    # kubernetes.io/ingress.class: traefik
-    # traefik.ingress.kubernetes.io/router.entrypoints: web # Or websecure for HTTPS
-    traefik.ingress.kubernetes.io/router.middlewares: portainer-strip-prefix@kubernetescrd # Referencing the Middleware
-spec:
-  # ingressClassName: traefik # Uncomment and use if you have a specific IngressClass named 'traefik' or if it's required by your setup.
-  rules:
-  - http: # Assuming your Traefik entrypoint (e.g., web) listens on HTTP.
-           # For HTTPS, configure TLS section and ensure Traefik entrypoint (e.g., websecure) is used.
-      paths:
-      - path: /portainer
-        pathType: Prefix # Ensures /portainer and /portainer/* are matched
-        backend:
-          service:
-            name: portainer
-            port:
-              number: 9000 # Route to Portainer's HTTP port. Portainer will handle its own HTTPS on 9443 if accessed directly,
-                           # but Traefik can handle TLS termination for the Ingress.
+# apiVersion: traefik.io/v1alpha1 # Use traefik.containo.us/v1alpha1 for older Traefik versions
+# kind: Middleware
+# metadata:
+#   name: portainer-strip-prefix
+#   namespace: portainer
+# spec:
+#   stripPrefix:
+#     prefixes:
+#       - /portainer
+#     # forceSlash: false # Default is true. Keep true so /portainer results in / for the backend.
+# ---
+# # Ingress route for Portainer
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: portainer-ingress
+#   namespace: portainer
+#   annotations:
+#     # If your k3s Traefik is not the default or you need specific entrypoints:
+#     # kubernetes.io/ingress.class: traefik
+#     # traefik.ingress.kubernetes.io/router.entrypoints: web # Or websecure for HTTPS
+#     # traefik.ingress.kubernetes.io/router.middlewares: portainer-strip-prefix@kubernetescrd # Referencing the Middleware
+# spec:
+#   # ingressClassName: traefik # Uncomment and use if you have a specific IngressClass named 'traefik' or if it's required by your setup.
+#   rules:
+#   - http: # Assuming your Traefik entrypoint (e.g., web) listens on HTTP.
+#            # For HTTPS, configure TLS section and ensure Traefik entrypoint (e.g., websecure) is used.
+#       paths:
+#       - path: /portainer
+#         pathType: Prefix # Ensures /portainer and /portainer/* are matched
+#         backend:
+#           service:
+#             name: portainer
+#             port:
+#               number: 9000 # Route to Portainer's HTTP port. Portainer will handle its own HTTPS on 9443 if accessed directly,
+#                            # but Traefik can handle TLS termination for the Ingress.
