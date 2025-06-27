@@ -1,0 +1,11 @@
+# Minimal example, adjust for your needs
+hostname: rancher.sandbox.rexden.us
+# Certificates:
+# If you have your own certs:
+# tls:
+#   source: secret
+#   secretName: tls-rancher-ingress
+# Else, cert-manager will generate them (recommended for simplicity initially):
+ingress:
+  tls:
+    source: rancher

@@ -1,0 +1,10 @@
+apiVersion: v2
+name: rancher
+version: 0.1.0 # Or whatever version you want for your wrapper chart
+appVersion: "2.11.3" # The Rancher version you want to deploy
+description: A Helm chart for deploying Rancher
+type: application
+dependencies:
+  - name: rancher
+    version: "2.11.3" # Match appVersion, or specify the exact chart version
+    repository: "https://releases.rancher.com/server-charts/stable"
