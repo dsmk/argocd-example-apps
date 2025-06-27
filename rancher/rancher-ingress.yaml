@@ -1,0 +1,37 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rancher-ingress
+  namespace: rancher
+  annotations:
+    # Use this annotation to tell Traefik to use HTTPS and redirect HTTP to HTTPS
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    #traefik.ingress.kubernetes.io/service.serversscheme: http
+    # The following does not work
+    #traefik.ingress.kubernetes.io/service.serverstransport: portainer-insecure-transport@kubernetescrd
+    # traefik.ingress.kubernetes.io/router.entrypoints.web.rule: "Host(`portainer.sandbox.rexden.us`)"
+    # traefik.ingress.kubernetes.io/router.entrypoints.web.middlewares: "redirect-to-https@kubernetescrd"
+    # # If you have a specific TLS Secret (e.g., from cert-manager), specify it here
+    # kubernetes.io/tls-acme: "true" # For cert-manager, if using ACME
+    cert-manager.io/cluster-issuer: "letsencrypt-prod" # Example for cert-manager
+spec:
+  rules:
+  - host: rancher.sandbox.rexden.us # Replace with your actual domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: rancher
+            port:
+              number: 443 # Expose the HTTPS port of Portainer
+              #number: 9443 # Expose the HTTPS port of Portainer
+  tls:
+  - hosts:
+    - rancher.sandbox.rexden.us # Replace with your actual domain
+    secretName: rancher-tls-secret # Traefik will look for a TLS secret named this
+                                      # If you use cert-manager, this will be created automatically.
+                                      # If not, you'll need to create it manually (see step 3).
