@@ -1,5 +1,5 @@
 # Minimal example, adjust for your needs
-hostname: rancher.sandbox.rexden.us
+hostname: sandbox.rexden.us
 # Certificates:
 # If you have your own certs:
 # tls:
